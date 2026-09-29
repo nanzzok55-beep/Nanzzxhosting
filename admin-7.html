@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NANZZ ADMIN — Konfirmasi Pesanan</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#08090d;color:#fff;font-family:Arial,sans-serif}
+header{position:sticky;top:0;z-index:5;background:#0d0f15ee;border-bottom:1px solid #272b38;padding:16px 5%;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.brand{font-weight:900;font-size:20px}.brand span{color:#9b7cff}.wrap{max-width:1100px;margin:auto;padding:25px 5%}
+.btn{border:0;border-radius:10px;padding:11px 15px;background:#9b7cff;color:#fff;font-weight:800;cursor:pointer}.btn:hover{opacity:.9}.danger{background:#b42335}.green{background:#159957}.gray{background:#202431}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}.stat{background:#11131a;border:1px solid #272b38;border-radius:14px;padding:16px}.stat b{display:block;font-size:25px;margin-top:5px}
+.order{background:#11131a;border:1px solid #272b38;border-radius:16px;margin:14px 0;padding:18px}.top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.id{font-weight:900}.badge{display:inline-block;padding:6px 10px;border-radius:99px;font-size:12px;font-weight:800;background:#3a3012;color:#ffe59b}.ok{background:#123a25;color:#91ffc1}.no{background:#401721;color:#ff9daa}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-top:15px}.box{background:#0d0f15;border:1px solid #272b38;border-radius:12px;padding:13px}.muted{color:#9aa1ad;line-height:1.5}.target{word-break:break-all;color:#cfc7ff}.proof{width:100%;max-height:430px;object-fit:contain;background:#05060a;border-radius:10px;margin-top:8px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px}.empty{text-align:center;padding:60px 15px;color:#9aa1ad;background:#11131a;border:1px dashed #303442;border-radius:16px}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0}.filters button.active{outline:2px solid #b49cff}
+.toast{position:fixed;top:18px;right:18px;z-index:99;background:#151923;border:1px solid #343a4b;padding:12px 15px;border-radius:10px;display:none}
+@media(max-width:700px){.stats{grid-template-columns:1fr 1fr}.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">NANZZ <span>ADMIN</span></div>
+  <div>
+    <button class="btn gray" onclick="refresh()">🔄 Refresh</button>
+    <button class="btn danger" onclick="clearAll()">🗑️ Hapus Semua</button>
+  </div>
+</header>
+
+<main class="wrap">
+  <h2>Panel Konfirmasi Pembayaran</h2>
+  <p class="muted">Pesanan dari <b>index.html</b> yang memakai penyimpanan order <code>nanzz_orders</code>.</p>
+
+  <div class="stats">
+    <div class="stat">Semua<b id="all">0</b></div>
+    <div class="stat">Perlu Pemeriksaan<b id="pending">0</b></div>
+    <div class="stat">Di-ACC<b id="approved">0</b></div>
+    <div class="stat">Ditolak<b id="rejected">0</b></div>
+  </div>
+
+  <div class="filters">
+    <button class="btn active" data-filter="all" onclick="setFilter('all',this)">Semua</button>
+    <button class="btn gray" data-filter="pending" onclick="setFilter('pending',this)">⏳ Pending</button>
+    <button class="btn gray" data-filter="approved" onclick="setFilter('approved',this)">✅ ACC</button>
+    <button class="btn gray" data-filter="rejected" onclick="setFilter('rejected',this)">❌ Ditolak</button>
+  </div>
+
+  <div id="orders"></div>
+</main>
+<div id="toast" class="toast"></div>
+
+<script>
+const KEY='nanzz_orders';
+let filter='all';
+
+function getOrders(){
+  try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){return[]}
+}
+function saveOrders(a){localStorage.setItem(KEY,JSON.stringify(a))}
+function esc(v){
+  return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function rp(n){return 'Rp'+Number(n||0).toLocaleString('id-ID')}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';clearTimeout(window.__toast);window.__toast=setTimeout(()=>t.style.display='none',2200)}
+function setFilter(f,el){filter=f;document.querySelectorAll('.filters button').forEach(x=>x.classList.remove('active'));el.classList.add('active');render()}
+function statusBadge(s){
+  if(s==='DIBAYAR')return '<span class="badge ok">✅ DIBAYAR / ACC</span>';
+  if(s==='DITOLAK')return '<span class="badge no">❌ DITOLAK</span>';
+  if(s==='PERLU PEMERIKSAAN')return '<span class="badge">⏳ PERLU PEMERIKSAAN</span>';
+  return '<span class="badge">💳 MENUNGGU PEMBAYARAN</span>';
+}
+function formatDate(v){try{return new Date(v).toLocaleString('id-ID')}catch(e){return '-'}}
+
+function render(){
+  const all=getOrders().slice().sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0));
+  const pending=all.filter(o=>o.status==='PERLU PEMERIKSAAN');
+  const approved=all.filter(o=>o.status==='DIBAYAR');
+  const rejected=all.filter(o=>o.status==='DITOLAK');
+  document.getElementById('all').textContent=all.length;
+  document.getElementById('pending').textContent=pending.length;
+  document.getElementById('approved').textContent=approved.length;
+  document.getElementById('rejected').textContent=rejected.length;
+
+  let data=filter==='pending'?pending:filter==='approved'?approved:filter==='rejected'?rejected:all;
+  const root=document.getElementById('orders');
+  if(!data.length){root.innerHTML='<div class="empty">📭 Tidak ada pesanan pada filter ini.</div>';return}
+
+  root.innerHTML=data.map(o=>{
+    const items=(o.items||[]).map(i=>`<div>• ${esc(i.name)} × ${Number(i.qty||1)} — ${rp(Number(i.price||0)*Number(i.qty||1))}</div>`).join('');
+    const target=o.targetLink||o.target||o.link||o.sewaGroupLink||'';
+    const proof=o.proofData?`<img class="proof" src="${o.proofData}" alt="Bukti transfer">`:'<div class="muted">Belum ada screenshot bukti transfer.</div>';
+    const canApprove=o.status==='PERLU PEMERIKSAAN';
+    return `<section class="order">
+      <div class="top">
+        <div><div class="id">${esc(o.id||'-')}</div><div class="muted">${formatDate(o.createdAt)}</div></div>
+        <div>${statusBadge(o.status)}</div>
+      </div>
+      <div class="grid">
+        <div class="box">
+          <b>👤 Data Pembeli</b>
+          <p><b>Nama:</b> ${esc(o.name||'-')}<br><b>WhatsApp:</b> ${esc(o.phone||'-')}</p>
+          <b>🛒 Pesanan</b><div class="muted">${items||'-'}</div>
+          <p><b>Total:</b> ${rp(o.total)}</p>
+          ${target?`<p><b>🔗 Target / Link:</b><br><span class="target">${esc(target)}</span></p>`:'<p class="muted"><b>🔗 Target / Link:</b> Belum ada link target pada data order.</p>'}
+          ${o.sewaGroupLink?`<p><b>👥 Link Grup Sewabot:</b><br><span class="target">${esc(o.sewaGroupLink)}</span></p>`:''}
+        </div>
+        <div class="box">
+          <b>🧾 Bukti Pembayaran</b>
+          ${o.proofName?`<p class="muted">File: ${esc(o.proofName)}</p>`:''}
+          ${proof}
+        </div>
+      </div>
+      <div class="actions">
+        ${canApprove?`<button class="btn green" onclick="approve('${esc(o.id)}')">✅ ACC Pembayaran</button>
+        <button class="btn danger" onclick="rejectOrder('${esc(o.id)}')">❌ Tolak</button>`:''}
+        <button class="btn gray" onclick="copyOrder('${esc(o.id)}')">📋 Salin Data</button>
+        <button class="btn danger" onclick="removeOrder('${esc(o.id)}')">🗑️ Hapus</button>
+      </div>
+    </section>`;
+  }).join('');
+}
+
+function updateOrder(id,status){
+  const a=getOrders();const i=a.findIndex(o=>o.id===id);if(i<0)return;
+  a[i]={...a[i],status,adminConfirmedAt:new Date().toISOString()};
+  saveOrders(a);render();toast(status==='DIBAYAR'?'Pembayaran berhasil di-ACC.':'Pembayaran ditolak.');
+}
+function approve(id){if(confirm('ACC pembayaran order '+id+'?'))updateOrder(id,'DIBAYAR')}
+function rejectOrder(id){if(confirm('Tolak pembayaran order '+id+'?'))updateOrder(id,'DITOLAK')}
+function removeOrder(id){
+  if(!confirm('Hapus order '+id+' dari browser ini?'))return;
+  saveOrders(getOrders().filter(o=>o.id!==id));render();toast('Order dihapus.');
+}
+function copyOrder(id){
+  const o=getOrders().find(x=>x.id===id);if(!o)return;
+  const target=o.targetLink||o.target||o.link||o.sewaGroupLink||'-';
+  const text=`Order: ${o.id}\nNama: ${o.name||'-'}\nWA: ${o.phone||'-'}\nProduk: ${(o.items||[]).map(i=>i.name+' x'+(i.qty||1)).join(', ')}\nTotal: ${rp(o.total)}\nTarget: ${target}\nStatus: ${o.status||'-'}`;
+  navigator.clipboard?.writeText(text).then(()=>toast('Data order disalin.')).catch(()=>prompt('Salin data ini:',text));
+}
+function refresh(){render();toast('Data diperbarui.')}
+function clearAll(){
+  if(!confirm('Hapus SEMUA order dari penyimpanan browser ini?'))return;
+  localStorage.removeItem(KEY);render();toast('Semua order dihapus.');
+}
+window.addEventListener('storage',render);
+render();
+</script>
+</body>
+</html>
